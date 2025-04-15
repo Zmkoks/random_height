@@ -41,3 +41,62 @@ This is your master country dataset, combining ISO codes, regions, nationalities
         Afghanistan: Male 168.5 cm, Female 156.1 cm, Southern Asia
 
 Source: Wikipedia contributors. "Average human height by country." *Wikipedia, The Free Encyclopedia*. https://en.wikipedia.org/wiki/Average_human_height_by_country
+
+
+📊 Overview of the Data Sources
+
+WHO Child Growth Standards (0–5 years): These standards were developed from the WHO Multicentre Growth Reference Study, which collected growth data from over 8,000 healthy breastfed infants and young children across diverse countries, including Brazil, Ghana, India, Norway, Oman, and the USA. The resulting charts provide percentile curves for various growth indicators, such as length/height-for-age, weight-for-age, and BMI-for-age, and are considered the global standard for assessing child growth from birth to 5 years. ​
+World Health Organization (WHO)+2World Health Organization (WHO)+2World Health Organization (WHO)+2
+
+CDC Growth Charts (2–20 years): The CDC's 2000 growth charts offer percentile curves for U.S. children and adolescents aged 2 to 20 years, covering measurements like stature-for-age, weight-for-age, and BMI-for-age. These charts are widely used in the United States to monitor growth patterns and assess the nutritional status of children and teens. ​
+CDC+1CDC+1
+🗂 Structure of Your Simplified Growth Chart
+
+Your consolidated chart includes the following columns:​
+
+    sex
+
+    age
+
+    P5
+
+    P10
+
+    P25
+
+    P50
+
+    P75
+
+    P90
+
+    P95​
+    CDC+5CDC+5CDC+5
+    World Health Organization (WHO)
+
+The rows represent specific age milestones:​
+
+    Birth
+
+    3 months
+
+    6 months
+
+    9 months
+
+    1 year
+
+    1.5 years
+
+    2 years, continuing in half-year increments up to 18 years​
+    World Health Organization (WHO)+1CDC+1
+    World Health Organization (WHO)
+
+This format provides a streamlined reference for tracking growth patterns across key developmental stages.​
+🔗 References
+
+    WHO Child Growth Standards: https://www.who.int/tools/child-growth-standards
+
+    CDC Growth Charts: https://www.cdc.gov/growthcharts/index.htm​
+    World Health Organization (WHO)+3World Health Organization (WHO)+3
+
