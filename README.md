@@ -1,6 +1,6 @@
 📁 non_countries.csv
 
-This file contains height data for regions or sub-national areas that are not considered sovereign countries. These might be urban/rural divisions, provinces, or cities.
+This file contains height data for regions or sub-national areas that are not considered sovereign countries. These might be urban/rural divisions, provinces, or cities. (source: Wikipedia
 
     Columns:
 
@@ -39,3 +39,5 @@ This is your master country dataset, combining ISO codes, regions, nationalities
         Algeria: Male 175.0 cm, Female 162.3 cm, Northern Africa
 
         Afghanistan: Male 168.5 cm, Female 156.1 cm, Southern Asia
+
+Source: Wikipedia contributors. "Average human height by country." *Wikipedia, The Free Encyclopedia*. https://en.wikipedia.org/wiki/Average_human_height_by_country
