@@ -6,6 +6,8 @@ from difflib import get_close_matches
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 import ast
+import unicodedata
+
 
 # Load datasets (assume already loaded outside this snippet)
 # height_chart_df, all_countries_df, non_countries_df
@@ -20,10 +22,7 @@ all_countries_df = pd.read_csv(path_all_countries, encoding="ISO-8859-1")
 
 # Load non_countries.csv (broader regional terms, urban/rural distinctions)
 non_countries_df = pd.read_csv(path_non_countries, encoding="ISO-8859-1")
-non_countries_df = non_countries_df.rename(columns={
-    "male_height_cm": "male_avg",
-    "female_height_cm": "female_avg"
-})
+
 
 # Load WHO/CDC percentile chart
 height_chart_df = pd.read_csv(path_height_chart)
@@ -156,6 +155,14 @@ def apply_growth_modifiers(
     return result
 
 # Nationality percentile shift
+
+def normalise_name(name: str) -> str:
+    """
+    Standardises strings by removing special dashes and accents,
+    converting to lowercase, and stripping whitespace.
+    """
+    return unicodedata.normalize("NFKD", str(name)).replace("–", "-").replace("—", "-").replace("−", "-").lower().strip()
+
 def get_nationality_percentile_shift(nationality: str, sex: str) -> Union[float, str]:
     """
     Looks up the average height for a nationality and returns a percentile shift
@@ -178,26 +185,32 @@ def get_nationality_percentile_shift(nationality: str, sex: str) -> Union[float,
     sex = sex.lower()
     column = "female_avg" if sex == "female" else "male_avg"
     matched_row = None
-    nat_lower = nationality.lower()
+    nat_lower = normalise_name(nationality)
 
-    # --- Match by alpha-2, then alpha-3, then full country name, then nationality label ---
+    # --- Match in all_countries_df by code, name, or nationality ---
     for df in [
         all_countries_df[all_countries_df["alpha_2"].str.lower() == nat_lower],
         all_countries_df[all_countries_df["alpha_3"].str.lower() == nat_lower],
-        all_countries_df[all_countries_df["country"].str.lower() == nat_lower],
+        all_countries_df[all_countries_df["country"].apply(lambda x: normalise_name(x) == nat_lower)],
         all_countries_df[all_countries_df["nationality"].fillna("").str.lower().str.contains(nat_lower)],
     ]:
         if not df.empty:
             matched_row = df.iloc[0]
             break
 
-    # --- Fallback to broader groupings (e.g. "Middle East", "South-East Asia") ---
+    # --- Fallback to non_countries_df full match ---
     if matched_row is None:
-        match = non_countries_df[non_countries_df["country"].str.lower() == nat_lower]
+        match = non_countries_df[non_countries_df["country"].apply(lambda x: normalise_name(x) == nat_lower)]
+        if not match.empty:
+            matched_row = match.iloc[0]
+
+    # --- Partial match in non_countries_df ---
+    if matched_row is None:
+        match = non_countries_df[non_countries_df["country"].apply(lambda x: nat_lower in normalise_name(x))]
         if not match.empty:
             matched_row = match.iloc[0]
         else:
-            # Build suggestions if no match found
+            # Suggest possible matches
             names = (
                 non_countries_df["country"].tolist()
                 + all_countries_df["country"].dropna().tolist()
@@ -206,15 +219,14 @@ def get_nationality_percentile_shift(nationality: str, sex: str) -> Union[float,
             suggestions = get_close_matches(nationality, names, n=3, cutoff=0.6)
             return f"This nationality doesn't exist in our database. Did you mean: {', '.join(suggestions)}?"
 
-    # --- Calculate and return percentile shift ---
+    # --- Calculate shift ---
     avg_height = matched_row[column]
     british_avg = BRITISH_AVG_FEMALE if sex == "female" else BRITISH_AVG_MALE
     cm_diff = avg_height - british_avg
 
-    # Convert cm difference to estimated percentile shift
-    # Roughly: 1 percentile ~ 0.75cm (female), ~0.9cm (male)
-    shift = cm_diff / (0.75 if sex == "female" else 0.9)
+    shift = cm_diff / (0.75 if sex == "female" else 0.9)  # Rough cm-per-percentile approximation
     return round(shift, 1)
+
 
 # Random dip/spurt generator
 def generate_random_modifiers(
@@ -410,87 +422,61 @@ def generate_growth_with_nationality(
     return result
 
 
+import csv
+
+def detect_csv_delimiter(file_path: str, sample_lines: int = 5) -> str:
+    """
+    Detects whether a CSV file uses a comma or semicolon delimiter.
+    Defaults to comma if unsure.
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        sample = ''.join([next(f) for _ in range(sample_lines)])
+        dialect = csv.Sniffer().sniff(sample, delimiters=";,")
+        return dialect.delimiter
+
 def read_character_input_csv_with_validation(path: str) -> pd.DataFrame:
     """
-    Reads and validates the character growth input CSV.
-
-    ✅ What it does:
-    - Reads in the CSV file.
-    - Normalises case for key columns (sex, size_class, etc.).
-    - Converts string "None" or blanks into real Python `None`.
-    - Parses 'dip' column into a list of tuples.
-    - Converts 'add_random_dips' and 'add_random_spurts' into boolean values.
-    - Checks each row for valid input and prints clear warnings for bad entries.
-
-    📝 Expected Columns in CSV:
-    - name
-    - sex
-    - size_class
-    - birth
-    - growth_style
-    - nation
-    - dip
-    - add_random_dips
-    - add_random_spurts
-
-    🛑 Invalid entries are *not removed*, but are flagged in console output.
+    Reads and validates the character input CSV with automatic delimiter detection.
     """
 
-    # Read CSV
-    df = pd.read_csv(path)
+    delimiter = detect_csv_delimiter(path)
 
-    # Define valid options for key columns
+    # Read the file using detected delimiter
+    df = pd.read_csv(path, sep=delimiter)
+
+    # Valid values
     valid_sexes = {"male", "female"}
     valid_size_classes = {"XXS", "XS", "S", "SM", "M", "ML", "LM", "L", "XL", "XXL"}
     valid_birth_styles = {"premature", "normal", "late"}
     valid_growth_styles = {"early", "standard", "late"}
 
-    # Track validation issues
     errors = []
 
-    # --- Normalise ---
-    # Standardise case and fill in sensible defaults
+    # Normalise
     df["sex"] = df["sex"].str.lower().fillna("female")
     df["size_class"] = df["size_class"].str.upper().fillna("M")
 
-    # Lowercase or nullify columns where appropriate
     for col in ["birth", "growth_style", "nation"]:
-        df[col] = df[col].apply(
-            lambda x: x.lower() if isinstance(x, str) and x.strip().lower() != "none" else None
-        )
+        df[col] = df[col].apply(lambda x: x.lower() if isinstance(x, str) and x.strip().lower() != "none" else None)
 
-    # --- Parse 'dip' column safely ---
-    def parse_dip(val):
-        if pd.isna(val) or val == "None":
-            return None
-        try:
-            return ast.literal_eval(val)
-        except Exception:
-            return None
+    # Parse dip
+    df["dip"] = df["dip"].apply(lambda val: ast.literal_eval(val) if pd.notna(val) and val != "None" else None)
 
-    df["dip"] = df["dip"].apply(parse_dip)
-
-    # --- Convert random dip/spurt fields to boolean ---
+    # Convert boolean flags
     df["add_random_dips"] = df["add_random_dips"].apply(lambda x: str(x).strip().lower() == "true")
     df["add_random_spurts"] = df["add_random_spurts"].apply(lambda x: str(x).strip().lower() == "true")
 
-    # --- Validate Each Row ---
     for idx, row in df.iterrows():
         name = row.get("name", f"<row {idx+1}>")
-
         if row["sex"] not in valid_sexes:
             errors.append(f"{name}: Invalid sex '{row['sex']}'")
-
         if row["size_class"] not in valid_size_classes:
             errors.append(f"{name}: Invalid size_class '{row['size_class']}'")
-
         if row["birth"] is not None and row["birth"] not in valid_birth_styles:
             errors.append(f"{name}: Invalid birth '{row['birth']}'")
-
         if row["growth_style"] is not None and row["growth_style"] not in valid_growth_styles:
             errors.append(f"{name}: Invalid growth_style '{row['growth_style']}'")
 
-    # --- Show errors, if any ---
     if errors:
         print("⚠️ Validation Errors Found:")
         for e in errors:
